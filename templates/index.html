@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF--8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dry Bean Classification</title>
+    <style>
+        body { font-family: sans-serif; margin: 20px; background-color: #f4f4f4; color: #333; }
+        .container { background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); max-width: 700px; margin: auto;}
+        h1 { color: #5a3e2b; text-align: center; }
+        h2 { color: #7a5a3e; }
+        form label { display: block; margin-top: 12px; font-weight: bold; }
+        form input[type="number"] {
+            width: calc(100% - 22px); padding: 10px; margin-top: 5px;
+            border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box;
+        }
+        .button-group { margin-top: 20px; display: flex; justify-content: space-between; }
+        button {
+            background-color: #5a3e2b; color: white; padding: 12px 20px;
+            border: none; border-radius: 4px; cursor: pointer;
+            font-size: 16px; transition: background-color 0.3s ease;
+            flex-grow: 1; margin: 0 5px;
+        }
+        button#randomizeBtn { background-color: #007bff; }
+        button:hover { background-color: #7a5a3e; }
+        button#randomizeBtn:hover { background-color: #0056b3; }
+        #results-container { margin-top: 30px; }
+        .results { padding: 15px; background-color: #e9e4e0; border-radius: 4px;}
+        .results p { font-size: 1.1em; }
+        .results strong { color: #c0392b; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        .error { color: red; font-weight: bold; margin-top: 15px; padding: 10px; border: 1px solid red; border-radius: 4px; background-color: #ffebeb;}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🫘 Dry Bean Classification</h1>
+        <p>Enter the morphological features of a dry bean or use the 'Randomize Inputs' button, then click 'Classify Bean'.</p>
+
+        <form id="beanForm">
+            <h2>Input Bean Features:</h2>
+            {% for feature in feature_names %}
+                <label for="{{ feature }}">{{ feature.replace('_', ' ').title() }}:</label>
+                <!-- Pakai default value yg di-pass dari BE -->
+                <input type="number" id="{{ feature }}" name="{{ feature }}" step="any"
+                       value="{{ feature_defaults[feature] }}" required>
+            {% endfor %}
+            <div class="button-group">
+                <button type="button" id="randomizeBtn">🎲 Randomize Inputs</button>
+                <button type="submit" id="classifyBtn">Classify Bean</button>
+            </div>
+        </form>
+
+        <!-- Prediction result container -->
+        <div id="results-container">
+            {% if initial_error %}
+                <p class="error">{{ initial_error }}</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <script>
+        // Feature ranges and names yg di-pass dari BE
+        const featureRanges = {{ feature_ranges|tojson|safe }};
+        const featureNames = {{ feature_names|tojson|safe }};
+
+        // Randomizer Button
+        document.getElementById('randomizeBtn').addEventListener('click', function() {
+            featureNames.forEach(function(featureName) {
+                const inputElement = document.getElementById(featureName);
+                if (inputElement) {
+                    // Random berdasarkan range
+                    const rangeInfo = featureRanges[featureName] || { min: 0, max: 1, decimals: 2 };
+                    const [min, max, decimals] = rangeInfo;
+                    let randomValue = Math.random() * (max - min) + min;
+                    inputElement.value = randomValue.toFixed(decimals);
+                }
+            });
+        });
+
+        // Form Submission (AJAX)
+        document.getElementById('beanForm').addEventListener('submit', async function(event) {
+            event.preventDefault(); // Biar page gk reload pas submit
+
+            const classifyBtn = document.getElementById('classifyBtn');
+            const resultsContainer = document.getElementById('results-container');
+            const formData = new FormData(this);
+            const data = {};
+            formData.forEach((value, key) => { data[key] = value; });
+
+            // Set loading state & clear result container
+            classifyBtn.disabled = true;
+            classifyBtn.textContent = 'Classifying...';
+            resultsContainer.innerHTML = '';
+
+            // API call
+            try {
+                const response = await fetch('/predict', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data),
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    // Build result container HTML
+                    let probabilitiesHtml = '<h3>Prediction Probabilities:</h3><table><thead><tr><th>Bean Type</th><th>Probability</th></tr></thead><tbody>';
+                    for (const [beanType, prob] of Object.entries(result.probabilities)) {
+                        probabilitiesHtml += `<tr><td>${beanType}</td><td>${(prob * 100).toFixed(2)}%</td></tr>`;
+                    }
+                    probabilitiesHtml += '</tbody></table>';
+
+                    resultsContainer.innerHTML = `
+                        <div class="results">
+                            <h2>🔎 Classification Results:</h2>
+                            <p>Predicted bean type: <strong>${result.prediction.charAt(0).toUpperCase() + result.prediction.slice(1)}</strong></p>
+                            ${probabilitiesHtml}
+                        </div>`;
+                } else {
+                    resultsContainer.innerHTML = `<p class="error">${result.error}</p>`;
+                }
+            } catch (error) {
+                resultsContainer.innerHTML = `<p class="error">A network or client-side error occurred: ${error.message}</p>`;
+            } finally {
+                // Dah selesai loading
+                classifyBtn.disabled = false;
+                classifyBtn.textContent = 'Classify Bean';
+            }
+        });
+    </script>
+</body>
+</html>
