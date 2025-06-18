@@ -19,59 +19,90 @@ This project is a web application that classifies seven different types of dry b
 ```
 /dry-bean-app/
 ├── Dockerfile              # Instructions to build the Docker image
+├── docker-compose.yml      # Configuration for running the app with Docker Compose
 ├── requirements.txt        # Python package dependencies
 ├── app.py                  # The Flask backend application (serves frontend and API)
 ├── dry_bean_rf.joblib      # The pre-trained machine learning model
+├── scaler.joblib           # The pre-fitted scaler for data transformation
 └── /templates/
     └── index.html          # The frontend HTML, CSS, and JavaScript
 ```
 
 ## Getting Started
 
-There are two ways to run this application: using Docker (recommended for consistency) or running it locally in a Python environment.
+The recommended way to run this application is with Docker Compose, as it handles all setup, dependencies, and provides a live-reloading development server with a single command.
 
-### Method 1: Running with Docker (Recommended)
+### Method 1: Running with Docker Compose (Recommended)
 
-This method ensures the application runs in a clean, isolated environment with all dependencies handled automatically.
+This method is ideal for both development and production-like environments. It provides a consistent setup and enables live-reloading of the code.
 
 **Prerequisites:**
 
--   [Docker](https://www.docker.com/get-started) must be installed and running on your system.
+-   [Docker](https://www.docker.com/get-started) and [Docker Compose](https://docs.docker.com/compose/install/) must be installed and running on your system.
 
 **Steps:**
 
 1.  **Clone the repository:**
 
     ```bash
-    git clone <your-repository-url>
-    cd dry-bean-app
+    git clone <repository-url>
+    cd dry_bean_classification
     ```
 
-2.  **Build the Docker image:**
-    This command reads the `Dockerfile` and builds an image named `dry-bean-classifier`. The `.` indicates the build context is the current directory.
+2.  **Start the application:**
+    This single command reads the `docker-compose.yaml` file, builds the Docker image, and starts the container. The `-d` flag runs it in the background (detached mode).
+
+    ```bash
+    docker-compose up -d
+    ```
+
+    _If you want to see the application logs live in your terminal, run it without the `-d` flag: `docker-compose up`._
+
+3.  **Access the application:**
+    Open your web browser and navigate to:
+    **[http://localhost:5001](http://localhost:5001)**
+
+    Any changes you make to the Python code (`app.py`) will automatically restart the server inside the container.
+
+4.  **To stop the application:**
+    This command will gracefully stop and remove the container and its associated network.
+    ```bash
+    docker-compose down
+    ```
+
+### Method 2: Running with Docker (Without Compose)
+
+Use this method if you don't have Docker Compose or prefer to manage the container manually.
+
+**Prerequisites:**
+
+-   Docker installed and running.
+
+**Steps:**
+
+1.  **Build the Docker image:**
 
     ```bash
     docker build -t dry-bean-classifier .
     ```
 
-3.  **Run the Docker container:**
-    This command starts a container from the image you just built.
-
-    -   `-d`: Runs the container in detached mode (in the background).
-    -   `-p 5001:5000`: Maps port `5001` on your host machine to port `5000` inside the container (where Gunicorn is running).
-    -   `--name my-bean-app`: Assigns a convenient name to the running container.
+2.  **Run the Docker container:**
 
     ```bash
-    docker run -d -p 5001:5000 --name my-bean-app dry-bean-classifier
+    docker run -d -p 5001:5000 --name bean-app dry-bean-classifier
     ```
 
-4.  **Access the application:**
-    Open your web browser and navigate to:
-    **[http://localhost:5001](http://localhost:5001)**
+3.  **Access the application** at [http://localhost:5001](http://localhost:5001).
 
-### Method 2: Running Locally (Without Docker)
+4.  **To stop and remove the container:**
+    ```bash
+    docker stop bean-app
+    docker rm bean-app
+    ```
 
-This method is suitable for development or if you prefer not to use Docker.
+### Method 3: Running Locally (Without Docker)
+
+This method is suitable for quick tests or if you cannot use Docker.
 
 **Prerequisites:**
 
@@ -79,42 +110,31 @@ This method is suitable for development or if you prefer not to use Docker.
 
 **Steps:**
 
-1.  **Clone the repository:**
+1.  **Set up a virtual environment:**
 
     ```bash
-    git clone <your-repository-url>
-    cd dry-bean-app
+    # On macOS/Linux
+    python3 -m venv venv
+    source venv/bin/activate
+
+    # On Windows
+    python -m venv venv
+    venv\Scripts\activate
     ```
 
-2.  **Create and activate a virtual environment:**
-    This is a best practice to keep project dependencies isolated.
-
-    -   On macOS/Linux:
-        ```bash
-        python3 -m venv venv
-        source venv/bin/activate
-        ```
-    -   On Windows:
-        ```bash
-        python -m venv venv
-        venv\Scripts\activate
-        ```
-
-3.  **Install the required packages:**
+2.  **Install the required packages:**
 
     ```bash
     pip install -r requirements.txt
     ```
 
-4.  **Run the Flask application:**
+3.  **Run the Flask application:**
 
     ```bash
     python app.py
     ```
 
-5.  **Access the application:**
-    The application will be running in debug mode. Open your web browser and navigate to:
-    **[http://127.0.0.1:5000](http://127.0.0.1:5000)**
+4.  **Access the application** at [http://127.0.0.1:5000](http://127.0.0.1:5000).
 
 ## Usage
 
@@ -139,12 +159,12 @@ Accepts a JSON object containing the 16 bean features and returns a classificati
     {
         "Area": 58778,
         "Perimeter": 978.937,
-        "MajorAxisLength": 35,
-        "MinorAxisLength": 216,
+        "MajorAxisLength": 353. MajorAxisLength,
+        "MinorAxisLength": 216. MinorAxisLength,
         "AspectRation": 1.638,
         "Eccentricity": 0.791,
         "ConvexArea": 59560,
-        "EquivDiameter": 273.4,
+        "EquivDiameter": 273.4 EquivDiameter,
         "Extent": 0.77,
         "Solidity": 0.987,
         "roundness": 0.772,
@@ -157,7 +177,6 @@ Accepts a JSON object containing the 16 bean features and returns a classificati
     ```
 
 -   **Success Response (200 OK):**
-
     ```json
     {
         "success": true,
@@ -172,27 +191,4 @@ Accepts a JSON object containing the 16 bean features and returns a classificati
             "Sira": 0.02
         }
     }
-    ```
-
--   **Error Response (400 Bad Request or 500 Internal Server Error):**
-    ```json
-    {
-        "success": false,
-        "error": "Feature 'Area' is missing from the request."
-    }
-    ```
-
-## How to Stop the Container
-
-If you started the application using Docker, you can stop and remove the container with these commands:
-
-1.  **Stop the running container:**
-
-    ```bash
-    docker stop my-bean-app
-    ```
-
-2.  **Remove the stopped container:**
-    ```bash
-    docker rm my-bean-app
     ```

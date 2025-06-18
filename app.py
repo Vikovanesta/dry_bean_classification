@@ -2,12 +2,12 @@ from flask import Flask, request, render_template, jsonify
 import pandas as pd
 import joblib
 import os
-import numpy as np
 
 app = Flask(__name__)
 
 # Config
-MODEL_FILENAME = "dry_bean_rf.joblib"
+MODEL_FILENAME = "dry_bean_rf_s.joblib"
+SCALER_FILENAME = "scaler.joblib"
 CLASS_NAMES = ["Barbunya", "Bombay", "Cali", "Dermason", "Horoz", "Seker", "Sira"]
 EXPECTED_FEATURE_NAMES = [
     'Area', 'Perimeter', 'MajorAxisLength', 'MinorAxisLength', 'AspectRation',
@@ -17,10 +17,10 @@ EXPECTED_FEATURE_NAMES = [
 
 # Range value buat form randomizer
 FEATURE_RANGES_PY = {
-    'Area': (20000, 200000, 0), 'Perimeter': (500, 2000, 0),
-    'MajorAxisLength': (200, 800, 1), 'MinorAxisLength': (50, 400, 1),
-    'AspectRation': (1.0, 2.5, 3), 'Eccentricity': (0.4, 0.99, 4),
-    'ConvexArea': (25000, 210000, 0), 'EquivDiameter': (150, 550, 1),
+    'Area': (20000, 250000, 0), 'Perimeter': (500, 2000, 2),
+    'MajorAxisLength': (200, 750, 2), 'MinorAxisLength': (150, 450, 2),
+    'AspectRation': (1.0, 2.5, 4), 'Eccentricity': (0.2, 0.99, 4),
+    'ConvexArea': (20000, 250000, 0), 'EquivDiameter': (150, 550, 1),
     'Extent': (0.4, 0.9, 3), 'Solidity': (0.9, 0.99, 4),
     'roundness': (0.5, 0.95, 4), 'Compactness': (0.5, 0.9, 4),
     'ShapeFactor1': (0.002, 0.009, 5), 'ShapeFactor2': (0.0005, 0.0025, 6),
@@ -36,21 +36,28 @@ def get_default_feature_values():
         defaults[feature] = round(default_val, decimals)
     return defaults
 
-
-# Load model
+# Load model & scaler
 model = None
-model_load_error = None
+scaler = None
+load_error = None
 try:
     if os.path.exists(MODEL_FILENAME):
         model = joblib.load(MODEL_FILENAME)
-        print(f"Model '{MODEL_FILENAME}' loaded successfully.")
+        print(f"Model '{MODEL_FILENAME}' has been loaded.")
     else:
-        model_load_error = f"Model file '{MODEL_FILENAME}' not found."
-except Exception as e:
-    model_load_error = f"Error loading model: {str(e)}"
+        load_error = f"File model '{MODEL_FILENAME}' not found."
 
-if model_load_error:
-    print(model_load_error)
+    if os.path.exists(SCALER_FILENAME):
+        scaler = joblib.load(SCALER_FILENAME)
+        print(f"Scaler '{SCALER_FILENAME}' has been loaded.")
+    else:
+        load_error = f"File scaler '{SCALER_FILENAME}' not found." if not load_error else load_error
+        
+except Exception as e:
+    load_error = f"Failed to load ML model or scaler: {str(e)}"
+
+if load_error:
+    print(load_error)
 
 
 # Routes
@@ -61,14 +68,14 @@ def home():
                            feature_names=EXPECTED_FEATURE_NAMES,
                            feature_defaults=get_default_feature_values(),
                            feature_ranges=FEATURE_RANGES_PY,
-                           initial_error=model_load_error)
+                           initial_error=load_error)
 
 
 @app.route('/predict', methods=['POST'])
 def predict():
-    """Receives feature data as JSON and returns a prediction as JSON."""
-    if model is None:
-        return jsonify({'success': False, 'error': f"Model is not loaded. {model_load_error}"}), 500
+    """Receives feature data as JSON and return a prediction as JSON."""
+    if model is None or scaler is None:
+        return jsonify({'success': False, 'error': f"Model or Scaler is not loaded. {load_error}"}), 500
 
     try:
         input_data = request.get_json()
@@ -87,6 +94,9 @@ def predict():
                 raise ValueError(f"Invalid input for '{feature_name}'. A numeric value is required.")
 
         input_df = pd.DataFrame([input_features_dict])[EXPECTED_FEATURE_NAMES]
+        
+        #  Apply standard scaling
+        input_df = scaler.transform(input_df)
 
         # Predict
         prediction_idx = model.predict(input_df)[0]
